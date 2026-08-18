@@ -69,5 +69,52 @@ ghcup() { unset -f ghcup; [ -f "/Users/braxtonhall/.ghcup/env" ] && . "/Users/br
 # opencode
 export PATH=/Users/braxtonhall/.opencode/bin:$PATH
 
+# Create a git worktree at ~/.worktrees/<repo>/<name> and open a tmux session in it.
+# The worktree is automatically cleaned up when the tmux session is destroyed.
+worktree() {
+  local name="$1"
+  [[ -z "$name" ]] && { echo "Usage: worktree <name>" >&2; return 1; }
+
+  local repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "Error: not in a git repository" >&2
+    return 1
+  }
+
+  local repo_name=$(basename "$repo_root")
+  local worktree_path="$HOME/.worktrees/$repo_name/$name"
+  local session_name="$name"
+
+  if tmux has-session -t "$session_name" 2>/dev/null; then
+    echo "tmux session '$session_name' already exists, attaching..." >&2
+    tmux switch-client -t "$session_name" 2>/dev/null || tmux attach-session -t "$session_name"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$worktree_path")"
+  git worktree add "$worktree_path" -b "$name" || return 1
+  echo "Created worktree at $worktree_path"
+
+  # Schedule cleanup when the tmux session is destroyed.
+  # The session-destroyed hook runs before files are cleaned up, so the worktree
+  # is still valid at hook time.
+  tmux set-hook -t "$session_name" session-destroyed \
+    "run-shell 'git -C \"$repo_root\" worktree remove \"$worktree_path\" 2>/dev/null || rm -rf \"$worktree_path\"'"
+
+  if [[ -n "$TMUX" ]]; then
+    tmux new-session -d -s "$session_name" -c "$worktree_path"
+    tmux switch-client -t "$session_name"
+  else
+    tmux new-session -s "$session_name" -c "$worktree_path"
+  fi
+}
+
+# Typo alias: "gi tstatus" -> "git status"
+gi() {
+  local subcommand="${1#t}"
+  shift
+  \git "$subcommand" "$@"
+}
+
 # Dotfiles bare git repo
 alias dotfiles='/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME'
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"

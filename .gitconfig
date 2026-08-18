@@ -1,0 +1,11 @@
+[user]
+	name = braxtonhall
+	email = braxtonjhall@gmail.com
+[init]
+	defaultBranch = main
+[color]
+	ui = auto
+[push]
+	autoSetupRemote = true
+[core]
+	commentChar = ";"
